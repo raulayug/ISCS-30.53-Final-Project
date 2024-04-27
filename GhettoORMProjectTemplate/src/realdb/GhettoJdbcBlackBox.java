@@ -103,6 +103,7 @@ public class GhettoJdbcBlackBox {
 			System.out.println("Processing results: ");
 			
 			while (rs.next()) {
+				System.out.println("RS NEXT");
 
 				int columnCount = rs.getMetaData().getColumnCount();
 
@@ -113,7 +114,7 @@ public class GhettoJdbcBlackBox {
 					String key = rs.getMetaData().getColumnName(i);
 					Object columnValue = rs.getObject(i);
 					
-					//System.out.println(key+" "+columnValue);
+					System.out.println(key+" "+columnValue);
 					// put result into map
 					value.put(key, columnValue);
 				}
@@ -121,6 +122,7 @@ public class GhettoJdbcBlackBox {
 				returnValue.add(value);
 				
 			}
+			System.out.println("RS CLOSED");
 			rs.close();
 
 		} catch (SQLException se) {

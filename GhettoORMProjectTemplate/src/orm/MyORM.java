@@ -8,74 +8,86 @@ import annotations.MappedClass;
 import io.github.lukehutch.fastclasspathscanner.FastClasspathScanner;
 import io.github.lukehutch.fastclasspathscanner.scanner.ScanResult;
 
-public class MyORM 
-{	
-	
-	HashMap<Class, Class> entityToMapperMap = new HashMap<Class, Class>();
-	
-	
-	public void init() throws Exception
-	{
-		// scan all mappers -- @MappedClass
-		scanMappers();		
-		
-		// scan all the entities -- @Entity
-		scanEntities();
-				
-		// create all entity tables
-		createTables();
-
-	}
+import annotations.Entity;
+import annotations.Column;
+import dao.BasicMapper;
+import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
 
 
-	private void scanMappers() throws ClassNotFoundException 
-	{
-		ScanResult results = new FastClasspathScanner("dao").scan();
-		List<String> allResults = results.getNamesOfClassesWithAnnotation(MappedClass.class);
-		for (String s : allResults)
-		{
-			Class c = Class.forName(s);
-			throw new RuntimeException("No @Entity");
-		}
-		// use FastClasspathScanner to scan the dao package for @MappedClass
-		// check if the clazz has the @Entity annotation
-			// if not throw new RuntimeException("No @Entity")
-		// map the clazz to the mapper class
+public class MyORM {
 
-	}
-	
+    HashMap<Class, Class> entityToMapperMap = new HashMap<Class, Class>();
 
-	private void scanEntities() throws ClassNotFoundException 
-	{
-		// use FastClasspathScanner to scan the entity package for @Entity
-			// go through each of the fields 
-			// check if there is only 1 field with a Column id attribute
-			// if more than one field has id throw new RuntimeException("duplicate id=true")
-		
-		
-	}
-	
-	
-	public Object getMapper(Class clazz)
-	{
-		// create the proxy object for the mapper class supplied in clazz parameter
-		// all proxies will use the supplied DaoInvocationHandler as the InvocationHandler
+    public void init() throws Exception {
+        // Scan all mappers -- @MappedClass
+        scanMappers();
 
-		return null;
-	}
-	
+        // Scan all the entities -- @Entity
+        scanEntities();
 
-	private void createTables()
-	{
-		// go through all the Mapper classes in the map
-			// create a proxy instance for each
-			// all these proxies can be casted to BasicMapper
-			// run the createTable() method on each of the proxies
-		
-	}
+        // Create all entity tables
+        createTables();
+    }
 
-	
+    private void scanMappers() throws ClassNotFoundException {
+        ScanResult results = new FastClasspathScanner("dao").scan();
+        List<String> allResults = results.getNamesOfClassesWithAnnotation(MappedClass.class);
+        for (String s : allResults) {
+            Class c = Class.forName(s);
+            // Check if the clazz has the @MappedClass annotation
+            Annotation[] annotations = c.getAnnotations();
+            boolean hasMappedClassAnnotation = false;
+            for (Annotation annotation : annotations) {
+                if (annotation.annotationType().getSimpleName().equals("MappedClass")) {
+                    hasMappedClassAnnotation = true;
+                    break;
+                }
+            }
+            if (!hasMappedClassAnnotation) {
+                throw new RuntimeException("No @MappedClass");
+            }
+            // Map the clazz to the mapper class
+            // entityToMapperMap.put(clazz, ); // Replace with the actual mapper class
+        }
+    }
 
-	
-	
+    private void scanEntities() throws ClassNotFoundException {
+        ScanResult results = new FastClasspathScanner("entity.package").scan();
+        List<String> allResults = results.getNamesOfClassesWithAnnotation(Entity.class);
+        for (String className : allResults) {
+            Class<?> clazz = Class.forName(className);
+            Field[] fields = clazz.getDeclaredFields();
+            int idFieldCount = 0;
+            for (Field field : fields) {
+                if (field.isAnnotationPresent(Column.class)) {
+                    Column columnAnnotation = field.getAnnotation(Column.class);
+                    if (columnAnnotation.id()) {
+                        idFieldCount++;
+                    }
+                }
+            }
+            if (idFieldCount != 1) {
+                throw new RuntimeException("duplicate id=true");
+            }
+        }
+    }
+
+    public Object getMapper(Class<?> clazz) {
+        DaoInvocationHandler invocationHandler = new DaoInvocationHandler(/* pass any required parameters */);
+        return Proxy.newProxyInstance(clazz.getClassLoader(), new Class[]{clazz}, invocationHandler);
+    }
+
+
+    private void createTables() {
+        for (Class<?> mapperClass : entityToMapperMap.values()) {
+            try {
+                BasicMapper mapper = (BasicMapper) mapperClass.newInstance();
+                mapper.createTable();
+            } catch (InstantiationException | IllegalAccessException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 }
+
