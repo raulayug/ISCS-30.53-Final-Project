@@ -231,8 +231,12 @@ public class DaoInvocationHandler implements InvocationHandler {
 		// for the Object o parameter, get the value of the field
 			// if the field is null run the insert(Object o, Class entityClass, String tableName) method
 			// if the field is not null run the update(Object o, Class entityClass, String tableName) method
+
 		// Extract the @MappedClass annotation from the method
-	    MappedClass mappedClassAnnotation = method.getAnnotation(MappedClass.class);
+	    MappedClass mappedClassAnnotation = method.getDeclaringClass().getAnnotation(MappedClass.class);
+	    
+	    System.out.println("Method Class " + method.getClass());
+	    System.out.println("Mapped Class Annotation " + mappedClassAnnotation);
 
 	    // Get the class specified in the @MappedClass annotation
 	    Class<?> entityClass = mappedClassAnnotation.clazz();
@@ -293,7 +297,11 @@ public class DaoInvocationHandler implements InvocationHandler {
 
 	    for (Field field : fields) 
 	    {
-	        field.setAccessible(true); // Enable access to private fields
+	    	field.setAccessible(true); // Enable access to private fields
+	    	
+	        System.out.println("field: " + field);
+	        System.out.println("field name: " + field.getName());
+	        System.out.println("field value: " + field.get(o));
 
 	        // Get the value of the field from the object
 	        Object value = field.get(o);
@@ -303,7 +311,8 @@ public class DaoInvocationHandler implements InvocationHandler {
 
 	        // Add the column name and value to the respective joiners
 	        columnNames.add(columnName);
-	        columnValues.add(getValueAsSql(value));
+	        if (columnName != "id")
+	        	columnValues.add(getValueAsSql(value));
 	    }
 
 	    // Construct the INSERT SQL statement

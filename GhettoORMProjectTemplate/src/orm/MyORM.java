@@ -17,7 +17,7 @@ import java.lang.reflect.Proxy;
 
 public class MyORM {
 
-    HashMap<Class, Class> entityToMapperMap = new HashMap<Class, Class>();
+     HashMap<Class, Class> entityToMapperMap = new HashMap<Class, Class>();
 
     public void init() throws Exception {
         // Scan all mappers -- @MappedClass
@@ -41,6 +41,8 @@ public class MyORM {
             for (Annotation annotation : annotations) {
                 if (annotation.annotationType().getSimpleName().equals("MappedClass")) {
                     hasMappedClassAnnotation = true;
+                    System.out.println("MappedClass c: " + c);
+                    entityToMapperMap.put(c, c);
                     break;
                 }
             }
@@ -79,14 +81,15 @@ public class MyORM {
     }
 
 
-    private void createTables() {
-        for (Class<?> mapperClass : entityToMapperMap.values()) {
-            try {
-                BasicMapper mapper = (BasicMapper) mapperClass.newInstance();
-                mapper.createTable();
-            } catch (InstantiationException | IllegalAccessException e) {
-                e.printStackTrace();
-            }
+    private void createTables()
+    {
+        for (Class entityClass : entityToMapperMap.keySet()) {
+            Class mapperClass = entityToMapperMap.get(entityClass);
+            System.out.println("mapperClass: " + mapperClass);
+            
+            BasicMapper mapperInstance = (BasicMapper) Proxy.newProxyInstance( mapperClass.getClassLoader(), new Class[]{BasicMapper.class}, new DaoInvocationHandler());
+            System.out.println("mapperInstance: " + mapperInstance);
+            mapperInstance.createTable();
         }
     }
 }

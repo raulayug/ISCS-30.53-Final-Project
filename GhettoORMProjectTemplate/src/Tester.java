@@ -17,6 +17,7 @@ public class Tester {
 		for (int i = 0; i<10; i++)
 		{
 			Student s = new Student();
+			// s.setId(i);
 			s.setAge(10+i);
 			s.setFirst("Test"+i);
 			s.setLast("Test"+i);

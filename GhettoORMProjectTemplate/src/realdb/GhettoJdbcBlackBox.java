@@ -103,8 +103,6 @@ public class GhettoJdbcBlackBox {
 			System.out.println("Processing results: ");
 			
 			while (rs.next()) {
-				System.out.println("RS NEXT");
-
 				int columnCount = rs.getMetaData().getColumnCount();
 
 				
@@ -122,7 +120,6 @@ public class GhettoJdbcBlackBox {
 				returnValue.add(value);
 				
 			}
-			System.out.println("RS CLOSED");
 			rs.close();
 
 		} catch (SQLException se) {
