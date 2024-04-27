@@ -2,10 +2,20 @@ package orm;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.lang.reflect.Constructor;
+import java.sql.ResultSet;
+import java.util.HashMap;
 
 import realdb.GhettoJdbcBlackBox;
+
+import annotations.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.lang.annotation.Annotation;
+import java.util.StringJoiner;
 
 public class DaoInvocationHandler implements InvocationHandler {
 
@@ -25,15 +35,40 @@ public class DaoInvocationHandler implements InvocationHandler {
 	}
 	
 	@Override
-	public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+	public Object invoke(Object proxy, Method method, Object[] args) throws Throwable 
+	{
 		
 		// determine method annotation type and call the appropriate method
 			// @CreateTable
 			// @Save
 			// @Delete
 			// @Select
-			
-		return null;
+	    // If method has none of the specified annotations, return null
+		if (method.getAnnotation(CreateTable.class) != null) 
+		{
+	        createTable(method);
+	    } 
+		else if (method.getAnnotation(Delete.class) != null) 
+	    {
+	        if (args == null || args.length == 0) 
+	        {
+	            throw new IllegalArgumentException("Delete method requires an object parameter");
+	        }
+	        delete(method, args[0]);
+	    } 
+		else if (method.getAnnotation(Save.class) != null) 
+	    {
+	        if (args == null || args.length == 0) 
+	        {
+	            throw new IllegalArgumentException("Save method requires an object parameter");
+	        }
+	        save(method, args[0]);
+	    } 
+		else if (method.getAnnotation(Select.class) != null) 
+		{
+	        return select(method, args);
+	    }
+	    return null;
 	}
 	
 	
@@ -69,6 +104,51 @@ public class DaoInvocationHandler implements InvocationHandler {
 		
 // 		Run the sql
 		// jdbc.runSQL(SQL STRING);
+		
+		// Extract the @MappedClass annotation from the method
+	    MappedClass mappedClassAnnotation = method.getAnnotation(MappedClass.class);
+	    if (mappedClassAnnotation == null) 
+	    {
+	        throw new IllegalArgumentException("Method does not have a @MappedClass annotation");
+	    }
+
+	    // Get the class specified in the @MappedClass annotation
+	    Class<?> entityClass = mappedClassAnnotation.clazz();
+
+	    // Retrieve the table name from the class or annotation (you can decide the priority)
+	    String tableName = entityClass.getSimpleName(); // For example, assuming table name same as class name
+
+	    // Start building the CREATE TABLE SQL statement
+	    StringBuilder sqlBuilder = new StringBuilder("CREATE TABLE ");
+	    sqlBuilder.append(tableName).append(" (");
+
+	    // Use reflection to inspect the fields for @Column annotations
+	    Field[] fields = entityClass.getDeclaredFields();
+	    boolean firstColumn = true;
+	    for (Field field : fields) 
+	    {
+	        Column columnAnnotation = field.getAnnotation(Column.class);
+	        if (columnAnnotation != null) 
+	        {
+	            if (!firstColumn) 
+	            {
+	                sqlBuilder.append(", ");
+	            }
+	            sqlBuilder.append(columnAnnotation.name()).append(" ").append(columnAnnotation.sqlType());
+	            if (columnAnnotation.id()) 
+	            {
+	                sqlBuilder.append(" PRIMARY KEY");
+	            }
+	            firstColumn = false;
+	        }
+	    }
+
+	    // Finish the SQL statement
+	    sqlBuilder.append(")");
+
+	    // Execute the SQL statement using JDBC
+	    String createTableSQL = sqlBuilder.toString();
+	    jdbc.runSQL(createTableSQL);
 	}
 	
 	// handles @Delete
@@ -89,6 +169,56 @@ public class DaoInvocationHandler implements InvocationHandler {
 		
 		// run the sql
 //		jdbc.runSQL(SQL STRING);
+		
+		// Extract the @MappedClass annotation from the method
+	    MappedClass mappedClassAnnotation = method.getAnnotation(MappedClass.class);
+	    if (mappedClassAnnotation == null) 
+	    {
+	        throw new IllegalArgumentException("Method does not have a @MappedClass annotation");
+	    }
+
+	    // Get the class specified in the @MappedClass annotation
+	    Class<?> entityClass = mappedClassAnnotation.clazz();
+
+	    // Get the fields of the class
+	    Field[] fields = entityClass.getDeclaredFields();
+
+	    // Find the primary key field
+	    Field primaryKeyField = null;
+	    for (Field field : fields) 
+	    {
+	        Column columnAnnotation = field.getAnnotation(Column.class);
+	        if (columnAnnotation != null && columnAnnotation.id()) 
+	        {
+	            primaryKeyField = field;
+	            break;
+	        }
+	    }
+
+	    // Throw exception if primary key field is not found
+	    if (primaryKeyField == null) 
+	    {
+	        throw new RuntimeException("No primary key field found");
+	    }
+
+	    // Get the value of the primary key field for the object
+	    primaryKeyField.setAccessible(true); // Enable access to private fields
+	    Object primaryKeyValue = primaryKeyField.get(o);
+
+	    // Throw exception if primary key value is null
+	    if (primaryKeyValue == null) 
+	    {
+	        throw new RuntimeException("Primary key value is null");
+	    }
+
+	    // Construct the DELETE SQL statement
+	    StringBuilder sqlBuilder = new StringBuilder("DELETE FROM ");
+	    sqlBuilder.append(entityClass.getSimpleName()).append(" WHERE ")
+	              .append(primaryKeyField.getName()).append("=").append(primaryKeyValue);
+
+	    // Execute the SQL statement using JDBC
+	    String deleteSQL = sqlBuilder.toString();
+	    jdbc.runSQL(deleteSQL);
 	}
 	
 	// handles @Save
@@ -101,7 +231,46 @@ public class DaoInvocationHandler implements InvocationHandler {
 		// for the Object o parameter, get the value of the field
 			// if the field is null run the insert(Object o, Class entityClass, String tableName) method
 			// if the field is not null run the update(Object o, Class entityClass, String tableName) method
+		// Extract the @MappedClass annotation from the method
+	    MappedClass mappedClassAnnotation = method.getAnnotation(MappedClass.class);
+	    if (mappedClassAnnotation == null) 
+	    {
+	        throw new IllegalArgumentException("Method does not have a @MappedClass annotation");
+	    }
 
+	    // Get the class specified in the @MappedClass annotation
+	    Class<?> entityClass = mappedClassAnnotation.clazz();
+
+	    // Get the fields of the class
+	    Field[] fields = entityClass.getDeclaredFields();
+
+	    // Find the primary key field
+	    Field primaryKeyField = null;
+	    for (Field field : fields) 
+	    {
+	        Column columnAnnotation = field.getAnnotation(Column.class);
+	        if (columnAnnotation != null && columnAnnotation.id()) 
+	        {
+	            primaryKeyField = field;
+	            break;
+	        }
+	    }
+
+	    // Get the value of the primary key field for the object
+	    primaryKeyField.setAccessible(true); // Enable access to private fields
+	    Object primaryKeyValue = primaryKeyField.get(o);
+
+	    // Determine whether to insert or update based on the value of the primary key field
+	    if (primaryKeyValue == null) 
+	    {
+	        // Primary key value is null, insert a new record
+	        insert(o, entityClass, entityClass.getSimpleName());
+	    } 
+	    else 
+	    {
+	        // Primary key value is not null, update the existing record
+	        update(o, entityClass, entityClass.getSimpleName());
+	    }
 	}
 
 	private void insert(Object o, Class entityClass, String tableName) throws Exception 
@@ -118,6 +287,35 @@ public class DaoInvocationHandler implements InvocationHandler {
 		
 // 		run sql		
 //		jdbc.runSQL(SQL STRING);
+		
+		// Get the fields of the class
+	    Field[] fields = entityClass.getDeclaredFields();
+
+	    // Construct the list of column names and values for the INSERT statement
+	    StringJoiner columnNames = new StringJoiner(", ");
+	    StringJoiner columnValues = new StringJoiner(", ");
+
+	    for (Field field : fields) 
+	    {
+	        field.setAccessible(true); // Enable access to private fields
+
+	        // Get the value of the field from the object
+	        Object value = field.get(o);
+
+	        // Get the column name from the field's name
+	        String columnName = field.getName();
+
+	        // Add the column name and value to the respective joiners
+	        columnNames.add(columnName);
+	        columnValues.add(getValueAsSql(value));
+	    }
+
+	    // Construct the INSERT SQL statement
+	    String insertSQL = String.format("INSERT INTO %s (%s) VALUES (%s)",
+	                                     tableName, columnNames.toString(), columnValues.toString());
+
+	    // Execute the SQL statement using JDBC
+	    jdbc.runSQL(insertSQL);
 	}
 
 	private void update(Object o, Class entityClass, String tableName) throws IllegalAccessException, Exception {
@@ -131,6 +329,35 @@ public class DaoInvocationHandler implements InvocationHandler {
 		
 //		run sql
 //		jdbc.runSQL(SQL STRING);
+		
+		// Get the fields of the class
+	    Field[] fields = entityClass.getDeclaredFields();
+
+	    // Construct the list of column names and values for the INSERT statement
+	    StringJoiner columnNames = new StringJoiner(", ");
+	    StringJoiner columnValues = new StringJoiner(", ");
+
+	    for (Field field : fields) 
+	    {
+	        field.setAccessible(true); // Enable access to private fields
+
+	        // Get the value of the field from the object
+	        Object value = field.get(o);
+
+	        // Get the column name from the field's name
+	        String columnName = field.getName();
+
+	        // Add the column name and value to the respective joiners
+	        columnNames.add(columnName);
+	        columnValues.add(getValueAsSql(value));
+	    }
+
+	    // Construct the INSERT SQL statement
+	    String insertSQL = String.format("INSERT INTO %s (%s) VALUES (%s)",
+	                                     tableName, columnNames.toString(), columnValues.toString());
+
+	    // Execute the SQL statement using JDBC
+	    jdbc.runSQL(insertSQL);
 	}
 
 		
@@ -149,6 +376,23 @@ public class DaoInvocationHandler implements InvocationHandler {
 		
 //		this will pull actual values from the DB		
 //		List<HashMap<String, Object>> results = jdbc.runSQLQuery(SQL QUERY);
+		
+		// Extract the @MappedClass annotation from the method
+	    MappedClass mappedClassAnnotation = method.getAnnotation(MappedClass.class);
+	    if (mappedClassAnnotation == null) 
+	    {
+	        throw new IllegalArgumentException("Method does not have a @MappedClass annotation");
+	    }
+
+	    // Get the class specified in the @MappedClass annotation
+	    Class<?> entityClass = mappedClassAnnotation.clazz();
+
+	    // Generate the SELECT query
+	    String selectSQL = generateSelectSQL(entityClass);
+
+	    // Execute the SELECT query using JDBC
+	    List<HashMap<String, Object>> results = jdbc.runSQLQuery(selectSQL);
+
 
 		
 		// process list based on getReturnType
@@ -159,7 +403,11 @@ public class DaoInvocationHandler implements InvocationHandler {
 			// create an instance for each entry in results based on mapped class
 			// map the values to the corresponding fields in the object
 			// DO NOT HARD CODE THE TYPE and FIELDS USE REFLECTION
-			
+			for (HashMap<String, Object> row : results) 
+			{
+	            Object instance = mapRowToInstance(row, entityClass);
+	            returnValue.add(instance);
+	        }
 			return returnValue;
 		}
 		else
@@ -172,9 +420,38 @@ public class DaoInvocationHandler implements InvocationHandler {
 				// create one instance based on mapped class
 				// map the values to the corresponding fields in the object
 				// DO NOT HARD CODE THE TYPE and FIELDS USE REFLECTION
-						
-			return null;
+			if (results.size() == 0) 
+			{
+	            return null;
+	        } 
+			else if (results.size() > 1) 
+	        {
+	            throw new RuntimeException("More than one object matches the query");
+	        } 
+	        else 
+	        {
+	            return mapRowToInstance(results.get(0), entityClass);
+	        }
 		}
+	}
+	
+	// Helper method to generate the SELECT query
+	private String generateSelectSQL(Class entityClass) {
+	    // Construct the SELECT query based on the table name
+	    return "SELECT * FROM " + entityClass.getSimpleName();
+	}
+
+	// Helper method to map a row of data to an instance of the specified class
+	private Object mapRowToInstance(HashMap<String, Object> row, Class entityClass) throws Exception {
+	    Constructor<?> constructor = entityClass.getConstructor();
+	    Object instance = constructor.newInstance();
+	    Field[] fields = entityClass.getDeclaredFields();
+	    for (Field field : fields) {
+	        field.setAccessible(true);
+	        Object value = row.get(field.getName());
+	        field.set(instance, value);
+	    }
+	    return instance;
 	}
 	
 }
