@@ -1,6 +1,12 @@
 package orm;
 
 import java.util.HashMap;
+import java.lang.annotation.Annotation;
+import java.util.List;
+
+import annotations.MappedClass;
+import io.github.lukehutch.fastclasspathscanner.FastClasspathScanner;
+import io.github.lukehutch.fastclasspathscanner.scanner.ScanResult;
 
 public class MyORM 
 {	
@@ -24,6 +30,13 @@ public class MyORM
 
 	private void scanMappers() throws ClassNotFoundException 
 	{
+		ScanResult results = new FastClasspathScanner("dao").scan();
+		List<String> allResults = results.getNamesOfClassesWithAnnotation(MappedClass.class);
+		for (String s : allResults)
+		{
+			Class c = Class.forName(s);
+			throw new RuntimeException("No @Entity");
+		}
 		// use FastClasspathScanner to scan the dao package for @MappedClass
 		// check if the clazz has the @Entity annotation
 			// if not throw new RuntimeException("No @Entity")
