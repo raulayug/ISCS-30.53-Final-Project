@@ -233,10 +233,6 @@ public class DaoInvocationHandler implements InvocationHandler {
 			// if the field is not null run the update(Object o, Class entityClass, String tableName) method
 		// Extract the @MappedClass annotation from the method
 	    MappedClass mappedClassAnnotation = method.getAnnotation(MappedClass.class);
-	    if (mappedClassAnnotation == null) 
-	    {
-	        throw new IllegalArgumentException("Method does not have a @MappedClass annotation");
-	    }
 
 	    // Get the class specified in the @MappedClass annotation
 	    Class<?> entityClass = mappedClassAnnotation.clazz();
